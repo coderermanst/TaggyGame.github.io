@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>PeerJS Tag – Lobby, Chat, Power‑ups</title>
+  <style>
+    body { font-family: sans-serif; display: flex; gap: 20px; }
+
+    #left {
+      width: 260px;
+    }
+
+    #game {
+      position: relative;
+      width: 800px;
+      height: 500px;
+      border: 3px solid #222;
+      background: #ddd;
+      overflow: hidden;
+    }
+
+    .player {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      border-radius: 6px;
+      background-size: cover;
+      background-repeat: no-repeat;
+      transition: transform 0.08s linear, box-shadow 0.2s;
+    }
+
+    .boosted {
+      box-shadow: 0 0 15px 4px rgba(255, 215, 0, 0.9);
+    }
+
+    .powerup {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #ffeb3b 0%, #f57f17 70%);
+      animation: pulse 0.8s infinite alternate;
+    }
+
+    @keyframes pulse {
+      from { transform: scale(0.9); opacity: 0.7; }
+      to   { transform: scale(1.1); opacity: 1; }
+    }
+
+    #lobby, #chat {
+      border: 1px solid #aaa;
+      padding: 8px;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    #playersList {
+      max-height: 120px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      padding: 4px;
+      margin-top: 4px;
+    }
+
+    #chatLog {
+      width: 100%;
+      height: 150px;
+      border: 1px solid #ccc;
+      overflow-y: auto;
+      font-size: 13px;
+      padding: 4px;
+      background: #fafafa;
+    }
+
+    #chatInput {
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 4px;
+    }
+
+    .sysMsg { color: #666; font-style: italic; }
+    .meMsg { color: #2e7d32; }
+    .otherMsg { color: #1565c0; }
+  </style>
+</head>
+<body>
+<div id="left">
+  <h2>Multiplayer Tag</h2>
+
+  <div>
+    <input id="nameInput" placeholder="Your name" />
+  </div>
+  <br>
+  <button id="hostBtn">Host Game</button>
+  <input id="joinId" placeholder="Host Peer ID" />
+  <button id="joinBtn">Join Game</button>
+
+  <div id="myId"></div>
+  <div id="status">Not connected</div>
+
+  <div id="lobby">
+    <strong>Lobby</strong>
+    <div>State: <span id="gameState">LOBBY</span></div>
+    <button id="readyBtn" disabled>Ready</button>
+    <button id="startBtn" disabled>Start (host)</button>
+    <div>Players:</div>
+    <div id="playersList"></div>
+  </div>
+
+  <div id="chat">
+    <strong>Chat</strong>
+    <div id="chatLog"></div>
+    <input id="chatInput" placeholder="Type message and press Enter" disabled />
+  </div>
+</div>
+
+<div id="game"></div>
+
+<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script>
+const game = document.getElementById("game");
+const statusEl = document.getElementById("status");
+const myIdEl = document.getElementById("myId");
+const gameStateEl = document.getElementById("gameState");
+const playersListEl = document.getElementById("playersList");
+const chatLogEl = document.getElementById("chatLog");
+const chatInputEl = document.getElementById("chatInput");
+const readyBtn = document.getElementById("readyBtn");
+const startBtn = document.getElementById("startBtn");
+const nameInput = document.getElementById("nameInput");
+
+let peer = null;
+let isHost = false;
+let myId = null;
+let myConn = null;          // guest -> host
+let connections = {};       // host: peerId -> conn
+
+let players = {};           // peerId -> {name,x,y,texture,ready,boostUntil}
+let powerups = {};          // id -> {x,y}
+let gameState = "LOBBY";    // "LOBBY" | "PLAYING"
+
+const textures = [
+  "linear-gradient(135deg,#ff8a80,#ff5252)",
+  "linear-gradient(135deg,#82b1ff,#2962ff)",
+  "linear-gradient(135deg,#b9f6ca,#00c853)",
+  "linear-gradient(135deg,#ffd180,#ff6d00)",
+  "linear-gradient(135deg,#ea80fc,#d500f9)",
+  "linear-gradient(135deg,#b0bec5,#455a64)"
+];
+
+function logChat(msg, cls = "sysMsg") {
+  const div = document.createElement("div");
+  div.className = cls;
+  div.textContent = msg;
+  chatLogEl.appendChild(div);
+  chatLogEl.scrollTop = chatLogEl.scrollHeight;
+}
+
+function updateGameState(newState) {
+  gameState = newState;
+  gameStateEl.textContent = newState;
+}
+
+function createPlayerElement(id) {
+  let el = document.createElement("div");
+  el.className = "player";
+  el.id = "p_" + id;
+  game.appendChild(el);
+}
+
+function createPowerupElement(id) {
+  let el = document.createElement("div");
+  el.className = "powerup";
+  el.id = "pu_" + id;
+  game.appendChild(el);
+}
+
+function renderPlayers() {
+  for (let id in players) {
+    let p = players[id];
+    let el = document.getElementById("p_" + id);
+    if (!el) createPlayerElement(id);
+    el = document.getElementById("p_" + id);
+    el.style.left = p.x + "px";
+    el.style.top = p.y + "px";
+    el.style.backgroundImage = p.texture;
+    if (p.boostUntil && Date.now() < p.boostUntil) {
+      el.classList.add("boosted");
+    } else {
+      el.classList.remove("boosted");
+    }
+  }
+}
+
+function renderPowerups() {
+  // remove old
+  const existing = Array.from(document.querySelectorAll(".powerup"));
+  existing.forEach(el => {
+    const id = el.id.replace("pu_", "");
+    if (!powerups[id]) el.remove();
+  });
+
+  for (let id in powerups) {
+    let pu = powerups[id];
+    let el = document.getElementById("pu_" + id);
+    if (!el) createPowerupElement(id);
+    el = document.getElementById("pu_" + id);
+    el.style.left = pu.x + "px";
+    el.style.top = pu.y + "px";
+  }
+}
+
+function updatePlayersList() {
+  playersListEl.innerHTML = "";
+  for (let id in players) {
+    const p = players[id];
+    const div = document.createElement("div");
+    div.textContent = (id === myId ? "(You) " : "") +
+                      (p.name || id) +
+                      (p.ready ? " ✅" : "");
+    playersListEl.appendChild(div);
+  }
+}
+
+function broadcast(msg) {
+  if (!isHost) return;
+  for (let id in connections) {
+    if (connections[id].open) connections[id].send(msg);
+  }
+}
+
+function sendToHost(msg) {
+  if (myConn && myConn.open) myConn.send(msg);
+}
+
+function spawnPowerup() {
+  if (!isHost || gameState !== "PLAYING") return;
+  const id = "pu_" + Math.random().toString(36).slice(2, 8);
+  const x = Math.random() * (800 - 24);
+  const y = Math.random() * (500 - 24);
+  powerups[id] = { x, y };
+  broadcast({ type: "powerupSpawn", id, x, y });
+  renderPowerups();
+}
+
+setInterval(() => {
+  if (isHost && gameState === "PLAYING" && Object.keys(powerups).length < 4) {
+    spawnPowerup();
+  }
+}, 3000);
+
+function handlePickup(id) {
+  if (!isHost) return;
+  const pu = powerups[id];
+  if (!pu) return;
+  delete powerups[id];
+
+  const p = players[myId]; // host may also pick up, but we handle via message
+  broadcast({ type: "powerupRemove", id });
+  renderPowerups();
+}
+
+function setupHost() {
+  peer = new Peer();
+  isHost = true;
+
+  peer.on("open", id => {
+    myId = id;
+    myIdEl.textContent = "Host ID: " + id;
+    statusEl.textContent = "Waiting for players...";
+    readyBtn.disabled = false;
+    startBtn.disabled = true;
+    chatInputEl.disabled = false;
+
+    players[id] = {
+      name: nameInput.value.trim() || "Host",
+      x: 100, y: 100,
+      texture: textures[0],
+      ready: false,
+      boostUntil: 0
+    };
+    updatePlayersList();
+    renderPlayers();
+  });
+
+  peer.on("connection", conn => {
+    if (Object.keys(players).length >= 6) {
+      conn.close();
+      return;
+    }
+    connections[conn.peer] = conn;
+
+    conn.on("data", data => {
+      if (data.type === "join") {
+        const idx = Object.keys(players).length % textures.length;
+        players[data.id] = {
+          name: data.name || data.id,
+          x: 200 + Math.random() * 300,
+          y: 200 + Math.random() * 200,
+          texture: textures[idx],
+          ready: false,
+          boostUntil: 0
+        };
+
+        conn.send({ type: "fullState", players, powerups, gameState });
+        broadcast({ type: "playerJoined", id: data.id, player: players[data.id] });
+        updatePlayersList();
+        renderPlayers();
+        logChat(`${players[data.id].name} joined`, "sysMsg");
+      }
+
+      if (data.type === "move" && gameState === "PLAYING") {
+        const p = players[data.id];
+        if (!p) return;
+        p.x = data.x;
+        p.y = data.y;
+        broadcast({ type: "update", id: data.id, x: p.x, y: p.y });
+        renderPlayers();
+      }
+
+      if (data.type === "ready") {
+        if (players[data.id]) players[data.id].ready = data.ready;
+        broadcast({ type: "readyUpdate", id: data.id, ready: data.ready });
+        updatePlayersList();
+
+        const allReady = Object.values(players).length > 1 &&
+          Object.values(players).every(pl => pl.ready);
+        startBtn.disabled = !allReady;
+      }
+
+      if (data.type === "chat") {
+        const sender = players[data.id]?.name || data.id;
+        broadcast({ type: "chat", id: data.id, name: sender, text: data.text });
+        logChat(sender + ": " + data.text, "otherMsg");
+      }
+
+      if (data.type === "pickup") {
+        const pu = powerups[data.powerupId];
+        if (!pu) return;
+        delete powerups[data.powerupId];
+
+        const p = players[data.id];
+        if (!p) return;
+        p.boostUntil = Date.now() + 5000;
+
+        broadcast({ type: "powerupRemove", id: data.powerupId });
+        broadcast({ type: "boost", id: data.id, until: p.boostUntil });
+        renderPowerups();
+        renderPlayers();
+      }
+    });
+
+    conn.on("close", () => {
+      const pid = conn.peer;
+      if (players[pid]) {
+        logChat(`${players[pid].name} left`, "sysMsg");
+        delete players[pid];
+        broadcast({ type: "playerLeft", id: pid });
+        const el = document.getElementById("p_" + pid);
+        if (el) el.remove();
+        updatePlayersList();
+      }
+      delete connections[pid];
+    });
+  });
+}
+
+function setupGuest(hostId) {
+  peer = new Peer();
+
+  peer.on("open", id => {
+    myId = id;
+    myIdEl.textContent = "Your ID: " + id;
+    statusEl.textContent = "Connecting to host...";
+    readyBtn.disabled = false;
+    chatInputEl.disabled = false;
+
+    myConn = peer.connect(hostId);
+
+    myConn.on("open", () => {
+      statusEl.textContent = "Connected to host";
+      myConn.send({
+        type: "join",
+        id,
+        name: nameInput.value.trim() || "Player"
+      });
+    });
+
+    myConn.on("data", data => {
+      if (data.type === "fullState") {
+        players = data.players;
+        powerups = data.powerups || {};
+        updateGameState(data.gameState || "LOBBY");
+        updatePlayersList();
+        renderPlayers();
+        renderPowerups();
+      }
+
+      if (data.type === "playerJoined") {
+        players[data.id] = data.player;
+        updatePlayersList();
+        renderPlayers();
+        logChat(`${data.player.name} joined`, "sysMsg");
+      }
+
+      if (data.type === "playerLeft") {
+        delete players[data.id];
+        const el = document.getElementById("p_" + data.id);
+        if (el) el.remove();
+        updatePlayersList();
+      }
+
+      if (data.type === "update") {
+        if (!players[data.id]) return;
+        players[data.id].x = data.x;
+        players[data.id].y = data.y;
+        renderPlayers();
+      }
+
+      if (data.type === "readyUpdate") {
+        if (players[data.id]) players[data.id].ready = data.ready;
+        updatePlayersList();
+      }
+
+      if (data.type === "stateChange") {
+        updateGameState(data.state);
+      }
+
+      if (data.type === "chat") {
+        const cls = data.id === myId ? "meMsg" : "otherMsg";
+        logChat(data.name + ": " + data.text, cls);
+      }
+
+      if (data.type === "powerupSpawn") {
+        powerups[data.id] = { x: data.x, y: data.y };
+        renderPowerups();
+      }
+
+      if (data.type === "powerupRemove") {
+        delete powerups[data.id];
+        renderPowerups();
+      }
+
+      if (data.type === "boost") {
+        if (players[data.id]) {
+          players[data.id].boostUntil = data.until;
+          renderPlayers();
+        }
+      }
+    });
+  });
+}
+
+function startGame() {
+  if (!isHost) return;
+  updateGameState("PLAYING");
+  broadcast({ type: "stateChange", state: "PLAYING" });
+  statusEl.textContent = "Game started!";
+}
+
+window.addEventListener("keydown", e => {
+  if (!myId || !players[myId] || gameState !== "PLAYING") return;
+
+  const p = players[myId];
+  let moved = false;
+  const baseSpeed = 4;
+  const boosted = p.boostUntil && Date.now() < p.boostUntil;
+  const speed = boosted ? baseSpeed * 2 : baseSpeed;
+
+  if (e.key === "ArrowUp") { p.y -= speed; moved = true; }
+  if (e.key === "ArrowDown") { p.y += speed; moved = true; }
+  if (e.key === "ArrowLeft") { p.x -= speed; moved = true; }
+  if (e.key === "ArrowRight") { p.x += speed; moved = true; }
+
+  if (moved) {
+    p.x = Math.max(0, Math.min(760, p.x));
+    p.y = Math.max(0, Math.min(460, p.y));
+    renderPlayers();
+
+    if (isHost) {
+      broadcast({ type: "update", id: myId, x: p.x, y: p.y });
+    } else {
+      sendToHost({ type: "move", id: myId, x: p.x, y: p.y });
+    }
+
+    for (let pid in powerups) {
+      const pu = powerups[pid];
+      const dx = p.x + 20 - (pu.x + 12);
+      const dy = p.y + 20 - (pu.y + 12);
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 30) {
+        if (isHost) {
+          delete powerups[pid];
+          p.boostUntil = Date.now() + 5000;
+          broadcast({ type: "powerupRemove", id: pid });
+          broadcast({ type: "boost", id: myId, until: p.boostUntil });
+          renderPowerups();
+          renderPlayers();
+        } else {
+          sendToHost({ type: "pickup", id: myId, powerupId: pid });
+        }
+        break;
+      }
+    }
+  }
+});
+
+document.getElementById("hostBtn").onclick = () => {
+  if (peer) return;
+  setupHost();
+};
+
+document.getElementById("joinBtn").onclick = () => {
+  if (peer) return;
+  const hostId = document.getElementById("joinId").value.trim();
+  if (!hostId) return;
+  setupGuest(hostId);
+};
+
+readyBtn.onclick = () => {
+  if (!myId || !players[myId]) return;
+  const newReady = !players[myId].ready;
+  players[myId].ready = newReady;
+  updatePlayersList();
+
+  if (isHost) {
+    broadcast({ type: "readyUpdate", id: myId, ready: newReady });
+    const allReady = Object.values(players).length > 1 &&
+      Object.values(players).every(pl => pl.ready);
+    startBtn.disabled = !allReady;
+  } else {
+    sendToHost({ type: "ready", id: myId, ready: newReady });
+  }
+};
+
+startBtn.onclick = () => {
+  startGame();
+};
+
+chatInputEl.addEventListener("keydown", e => {
+  if (e.key !== "Enter") return;
+  const text = chatInputEl.value.trim();
+  if (!text || !myId) return;
+  chatInputEl.value = "";
+
+  const name = players[myId]?.name || myId;
+  if (isHost) {
+    broadcast({ type: "chat", id: myId, name, text });
+    logChat(name + ": " + text, "meMsg");
+  } else {
+    sendToHost({ type: "chat", id: myId, text });
+    logChat(name + ": " + text, "meMsg");
+  }
+});
+</script>
+</body>
+</html>
