@@ -1,741 +1,762 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8" />
-  <title>PeerJS Tag Platformer – Animated Dash Tag</title>
+  <title>PeerJS Platformer Tag – Camera, Platforms, Powerups</title>
   <style>
-    :root {
-      --bg: #0f172a;
-      --card: #1e293b;
-      --accent: #38bdf8;
-      --accent-soft: #0ea5e9;
-      --text: #e5e7eb;
-      --muted: #9ca3af;
-      --danger: #f97373;
-      --success: #4ade80;
+    body { font-family: sans-serif; display: flex; gap: 20px; }
+
+    #left { width: 260px; }
+
+    #lobby, #chat {
+      border: 1px solid #aaa;
+      padding: 8px;
+      margin-top: 10px;
+      font-size: 14px;
     }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: radial-gradient(circle at top, #1e293b 0, #020617 60%);
-      color: var(--text);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    h1 {
-      margin-top: 20px;
-      font-size: 24px;
-      letter-spacing: 0.04em;
-    }
-    #lobby {
-      margin-top: 16px;
-      padding: 16px 20px;
-      width: 900px;
-      max-width: 95vw;
-      background: rgba(15, 23, 42, 0.9);
-      border-radius: 16px;
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.8);
-      display: grid;
-      grid-template-columns: 2fr 1.5fr;
-      gap: 16px;
-    }
-    .card {
-      background: var(--card);
-      border-radius: 12px;
-      padding: 12px 14px;
-      border: 1px solid #334155;
-    }
-    .card h2 {
-      margin: 0 0 8px;
-      font-size: 16px;
-      color: var(--accent);
-    }
-    label {
-      display: block;
-      font-size: 12px;
-      color: var(--muted);
-      margin-bottom: 4px;
-    }
-    input {
-      width: 100%;
-      padding: 8px 10px;
-      border-radius: 8px;
-      border: 1px solid #334155;
-      background: #0f172a;
-      color: var(--text);
-      font-size: 13px;
-    }
-    input::placeholder {
-      color: #64748b;
-    }
-    button {
-      border: none;
-      border-radius: 999px;
-      padding: 8px 14px;
-      font-size: 13px;
-      cursor: pointer;
-      background: var(--accent-soft);
-      color: #0b1120;
-      font-weight: 600;
-      margin-right: 6px;
-      transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.12s ease;
-    }
-    button:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 8px 18px rgba(56, 189, 248, 0.35);
-      background: var(--accent);
-    }
-    button.secondary {
-      background: #334155;
-      color: var(--text);
-    }
-    button.secondary:hover {
-      background: #1f2937;
-      box-shadow: none;
-      transform: none;
-    }
-    #myIdDisplay {
-      font-size: 13px;
-      margin-top: 6px;
-      color: var(--muted);
-    }
+
     #playersList {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      font-size: 13px;
-    }
-    #playersList li {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 4px 0;
-      border-bottom: 1px solid #1f2937;
-    }
-    #playersList li:last-child {
-      border-bottom: none;
-    }
-    .pill {
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 11px;
-      background: #0f172a;
-      color: var(--muted);
-    }
-    .pill.it {
-      background: rgba(250, 204, 21, 0.15);
-      color: #facc15;
-    }
-    .pill.you {
-      background: rgba(56, 189, 248, 0.15);
-      color: var(--accent);
-    }
-    #log {
-      font-size: 11px;
       max-height: 120px;
-      overflow: auto;
-      margin-top: 8px;
-      padding: 6px 8px;
-      border-radius: 8px;
-      background: #020617;
-      border: 1px solid #1f2937;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      padding: 4px;
+      margin-top: 4px;
     }
-    #log div {
-      margin-bottom: 2px;
-      color: #9ca3af;
+
+    #chatLog {
+      width: 100%;
+      height: 150px;
+      border: 1px solid #ccc;
+      overflow-y: auto;
+      font-size: 13px;
+      padding: 4px;
+      background: #fafafa;
     }
-    #gameWrap {
-      margin-top: 16px;
-      padding-bottom: 24px;
+
+    #chatInput {
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 4px;
     }
-    canvas {
-      background: #020617;
-      border-radius: 16px;
-      border: 1px solid #1f2937;
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.9);
+
+    .sysMsg { color: #666; font-style: italic; }
+    .meMsg { color: #2e7d32; }
+    .otherMsg { color: #1565c0; }
+
+    #game {
+      position: relative;
+      width: 900px;   /* viewport width */
+      height: 550px;  /* viewport height */
+      border: 3px solid #222;
+      overflow: hidden;
+      background: linear-gradient(#87ceeb, #87ceeb 65%, #6d4c41 65%, #6d4c41);
+    }
+
+    #world {
+      position: absolute;
+      width: 2400px;   /* world width */
+      height: 550px;
+    }
+
+    .player {
+      position: absolute;
+      width: 40px;
+      height: 60px;
+      border-radius: 6px;
+      background-size: cover;
+      background-repeat: no-repeat;
+      box-sizing: border-box;
+      animation: idleBob 0.8s infinite alternate;
+      transition: transform 0.05s linear;
+    }
+
+    @keyframes idleBob {
+      from { transform: translateY(0); }
+      to   { transform: translateY(-3px); }
+    }
+
+    .it {
+      border: 3px solid #ffeb3b;
+      box-shadow: 0 0 15px 4px rgba(255, 235, 59, 0.9);
+    }
+
+    .boosted {
+      box-shadow: 0 0 18px 5px rgba(0, 255, 255, 0.9);
+    }
+
+    .powerup {
+      position: absolute;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      animation: pulse 0.8s infinite alternate;
+    }
+
+    .powerup.speed {
+      background: radial-gradient(circle, #00e5ff 0%, #01579b 70%);
+    }
+
+    .powerup.jump {
+      background: radial-gradient(circle, #ffeb3b 0%, #f57f17 70%);
+    }
+
+    @keyframes pulse {
+      from { transform: scale(0.9); opacity: 0.7; }
+      to   { transform: scale(1.1); opacity: 1; }
+    }
+
+    .platform {
+      position: absolute;
+      background: #5d4037;
+      border: 2px solid #3e2723;
+      border-radius: 4px;
     }
   </style>
 </head>
 <body>
-  <h1>PeerJS Tag Platformer – Dash Tag</h1>
+
+<div id="left">
+  <h2>Platformer Tag</h2>
+
+  <input id="nameInput" placeholder="Your name" />
+
+  <br><br>
+
+  <button id="hostBtn">Host Game</button>
+  <input id="joinId" placeholder="Host Peer ID" />
+  <button id="joinBtn">Join Game</button>
+
+  <div id="myId"></div>
+  <div id="status">Not connected</div>
 
   <div id="lobby">
-    <div class="card">
-      <h2>Connection</h2>
-      <div style="margin-bottom:8px;">
-        <button id="btnHost">Create Host</button>
-        <button id="btnConnect" class="secondary">Connect as Client</button>
-      </div>
-      <div id="myIdDisplay">Your ID: <span id="myId">-</span></div>
-      <div style="margin-top:10px;">
-        <label for="hostIdInput">Host ID to join</label>
-        <input id="hostIdInput" placeholder="Paste host ID here" />
-      </div>
-      <div style="margin-top:10px;">
-        <label for="nameInput">Your display name</label>
-        <input id="nameInput" placeholder="Optional – e.g. Player1" />
-      </div>
-      <div id="log"></div>
-    </div>
+    <strong>Lobby</strong>
+    <div>State: <span id="gameState">LOBBY</span></div>
+    <button id="readyBtn" disabled>Ready</button>
+    <button id="startBtn" disabled>Start (host)</button>
 
-    <div class="card">
-      <h2>Lobby</h2>
-      <ul id="playersList"></ul>
-      <div style="margin-top:8px; font-size:12px; color:var(--muted);">
-        <div>Controls: A/D or ←/→ to move, W/↑/Space to jump, Shift to dash (tag only during dash).</div>
-        <div style="margin-top:4px;">Power‑ups: Speed Boost (blue), Shield (green).</div>
-      </div>
-    </div>
+    <div>Players:</div>
+    <div id="playersList"></div>
   </div>
 
-  <div id="gameWrap">
-    <canvas id="game" width="900" height="500"></canvas>
+  <div id="chat">
+    <strong>Chat</strong>
+    <div id="chatLog"></div>
+    <input id="chatInput" placeholder="Type message and press Enter" disabled />
   </div>
+</div>
 
-  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-  <script>
-    // ---------- Logging ----------
-    const logEl = document.getElementById('log');
-    function log(msg) {
-      const p = document.createElement('div');
-      p.textContent = msg;
-      logEl.appendChild(p);
-      logEl.scrollTop = logEl.scrollHeight;
+<div id="game">
+  <div id="world"></div>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script>
+// Remove any ghost players on load
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".player").forEach(p => p.remove());
+});
+
+let peer = null;
+let isHost = false;
+let myId = null;
+let myConn = null;
+let connections = {}; // host: peerId -> conn
+
+// peerId -> {name, ready, x, y, vy, isIt, speedBoostUntil, jumpBoostUntil}
+let players = {};
+let gameState = "LOBBY";
+
+// powerupId -> {x, y, type}
+let powerups = {};
+
+const statusEl = document.getElementById("status");
+const myIdEl = document.getElementById("myId");
+const gameStateEl = document.getElementById("gameState");
+const playersListEl = document.getElementById("playersList");
+const chatLogEl = document.getElementById("chatLog");
+const chatInputEl = document.getElementById("chatInput");
+const readyBtn = document.getElementById("readyBtn");
+const startBtn = document.getElementById("startBtn");
+const gameEl = document.getElementById("game");
+const worldEl = document.getElementById("world");
+
+const gravity = 0.6;
+const baseMoveSpeed = 3.5;
+const baseJumpSpeed = -11;
+
+const worldWidth = 2400;
+const viewWidth = 900;
+const viewHeight = 550;
+
+const textures = [
+  "linear-gradient(135deg,#ff8a80,#ff5252)",
+  "linear-gradient(135deg,#82b1ff,#2962ff)",
+  "linear-gradient(135deg,#b9f6ca,#00c853)",
+  "linear-gradient(135deg,#ffd180,#ff6d00)",
+  "linear-gradient(135deg,#ea80fc,#d500f9)",
+  "linear-gradient(135deg,#b0bec5,#455a64)"
+];
+
+// Big map platforms (ground + floating)
+const platforms = [
+  { x: 0,    y: 500, w: worldWidth, h: 50 },  // ground
+  { x: 200,  y: 380, w: 220,  h: 20 },
+  { x: 600,  y: 340, w: 260,  h: 20 },
+  { x: 1050, y: 320, w: 240,  h: 20 },
+  { x: 1450, y: 280, w: 220,  h: 20 },
+  { x: 1850, y: 350, w: 260,  h: 20 },
+  { x: 2100, y: 260, w: 200,  h: 20 }
+];
+
+let keys = {};
+
+function updateGameState(state) {
+  gameState = state;
+  gameStateEl.textContent = state;
+}
+
+function updatePlayersList() {
+  playersListEl.innerHTML = "";
+  for (let id in players) {
+    const p = players[id];
+    const div = document.createElement("div");
+    const itMark = p.isIt ? " (IT)" : "";
+    div.textContent = (id === myId ? "(You) " : "") + p.name + itMark + (p.ready ? " ✔️" : "");
+    playersListEl.appendChild(div);
+  }
+}
+
+function logChat(msg, cls = "sysMsg") {
+  const div = document.createElement("div");
+  div.className = cls;
+  div.textContent = msg;
+  chatLogEl.appendChild(div);
+  chatLogEl.scrollTop = chatLogEl.scrollHeight;
+}
+
+function broadcast(msg) {
+  if (!isHost) return;
+  for (let id in connections) {
+    if (connections[id].open) connections[id].send(msg);
+  }
+}
+
+function sendToHost(msg) {
+  if (myConn && myConn.open) myConn.send(msg);
+}
+
+function createPlayerElement(id) {
+  let el = document.createElement("div");
+  el.className = "player";
+  el.id = "p_" + id;
+  worldEl.appendChild(el);
+}
+
+function createPowerupElement(id) {
+  let el = document.createElement("div");
+  el.className = "powerup";
+  el.id = "pu_" + id;
+  worldEl.appendChild(el);
+}
+
+function renderPlatforms() {
+  document.querySelectorAll(".platform").forEach(p => p.remove());
+  platforms.forEach(p => {
+    const el = document.createElement("div");
+    el.className = "platform";
+    el.style.left = p.x + "px";
+    el.style.top = p.y + "px";
+    el.style.width = p.w + "px";
+    el.style.height = p.h + "px";
+    worldEl.appendChild(el);
+  });
+}
+
+function renderPlayers() {
+  const ids = Object.keys(players);
+  ids.forEach((id, idx) => {
+    const p = players[id];
+    let el = document.getElementById("p_" + id);
+    if (!el) createPlayerElement(id);
+    el = document.getElementById("p_" + id);
+    el.style.left = p.x + "px";
+    el.style.top = p.y + "px";
+    el.style.backgroundImage = textures[idx % textures.length];
+    if (p.isIt) el.classList.add("it"); else el.classList.remove("it");
+    const boosted = (p.speedBoostUntil && Date.now() < p.speedBoostUntil) ||
+                    (p.jumpBoostUntil && Date.now() < p.jumpBoostUntil);
+    if (boosted) el.classList.add("boosted"); else el.classList.remove("boosted");
+  });
+
+  updateCamera();
+}
+
+function renderPowerups() {
+  Array.from(document.querySelectorAll(".powerup")).forEach(el => {
+    const id = el.id.replace("pu_", "");
+    if (!powerups[id]) el.remove();
+  });
+
+  for (let id in powerups) {
+    const pu = powerups[id];
+    let el = document.getElementById("pu_" + id);
+    if (!el) createPowerupElement(id);
+    el = document.getElementById("pu_" + id);
+    el.style.left = pu.x + "px";
+    el.style.top = pu.y + "px";
+    el.classList.toggle("speed", pu.type === "speed");
+    el.classList.toggle("jump", pu.type === "jump");
+  }
+}
+
+function spawnPowerup() {
+  if (!isHost || gameState !== "PLAYING") return;
+  if (Object.keys(powerups).length >= 6) return;
+
+  const id = Math.random().toString(36).slice(2, 8);
+  const type = Math.random() < 0.5 ? "speed" : "jump";
+  const x = 200 + Math.random() * (worldWidth - 400);
+  const y = 180 + Math.random() * 250;
+
+  powerups[id] = { x, y, type };
+  broadcast({ type: "powerupSpawn", id, x, y, powerupType: type });
+  renderPowerups();
+}
+
+setInterval(() => {
+  if (isHost && gameState === "PLAYING") spawnPowerup();
+}, 3500);
+
+function checkCollision(a, b) {
+  const ax1 = a.x, ay1 = a.y, ax2 = a.x + 40, ay2 = a.y + 60;
+  const bx1 = b.x, by1 = b.y, bx2 = b.x + 40, by2 = b.y + 60;
+  return ax1 < bx2 && ax2 > bx1 && ay1 < by2 && ay2 > by1;
+}
+
+function checkPowerupCollision(p) {
+  for (let id in powerups) {
+    const pu = powerups[id];
+    const ax1 = p.x, ay1 = p.y, ax2 = p.x + 40, ay2 = p.y + 60;
+    const bx1 = pu.x, by1 = pu.y, bx2 = pu.x + 26, by2 = pu.y + 26;
+    const hit = ax1 < bx2 && ax2 > bx1 && ay1 < by2 && ay2 > by1;
+    if (hit) return id;
+  }
+  return null;
+}
+
+function applyTag(fromId, toId) {
+  if (!players[fromId] || !players[toId]) return;
+  for (let id in players) players[id].isIt = false;
+  players[toId].isIt = true;
+  updatePlayersList();
+  renderPlayers();
+  broadcast({ type: "tagUpdate", itId: toId });
+  logChat(`${players[fromId].name} tagged ${players[toId].name}. ${players[toId].name} is IT now!`, "sysMsg");
+}
+
+function applyPlatformPhysics(p) {
+  p.vy += gravity;
+  p.y += p.vy;
+
+  let onGround = false;
+
+  for (let plat of platforms) {
+    const px1 = p.x;
+    const px2 = p.x + 40;
+    const py1 = p.y;
+    const py2 = p.y + 60;
+
+    const bx1 = plat.x;
+    const bx2 = plat.x + plat.w;
+    const by1 = plat.y;
+
+    const falling = p.vy >= 0;
+
+    if (falling && px2 > bx1 && px1 < bx2 && py2 >= by1 && py1 < by1 + 25) {
+      p.y = by1 - 60;
+      p.vy = 0;
+      onGround = true;
+    }
+  }
+
+  return onGround;
+}
+
+function updateCamera() {
+  if (!myId || !players[myId]) return;
+  const p = players[myId];
+
+  let targetX = p.x + 20 - viewWidth / 2;
+  targetX = Math.max(0, Math.min(worldWidth - viewWidth, targetX));
+
+  worldEl.style.left = -targetX + "px";
+}
+
+function physicsStep() {
+  if (gameState !== "PLAYING" || !myId || !players[myId]) return;
+
+  const p = players[myId];
+
+  const speedBoost = p.speedBoostUntil && Date.now() < p.speedBoostUntil;
+  const jumpBoost = p.jumpBoostUntil && Date.now() < p.jumpBoostUntil;
+
+  const moveSpeed = speedBoost ? baseMoveSpeed * 1.8 : baseMoveSpeed;
+  const jumpSpeed = jumpBoost ? baseJumpSpeed * 1.6 : baseJumpSpeed;
+
+  if (keys["ArrowLeft"] || keys["a"]) p.x -= moveSpeed;
+  if (keys["ArrowRight"] || keys["d"]) p.x += moveSpeed;
+
+  const onGroundBefore = applyPlatformPhysics(p);
+
+  if ((keys["ArrowUp"] || keys["w"] || keys[" "]) && onGroundBefore) {
+    p.vy = jumpSpeed;
+  }
+
+  p.x = Math.max(0, Math.min(worldWidth - 40, p.x));
+
+  if (isHost) {
+    broadcast({ type: "update", id: myId, x: p.x, y: p.y, vy: p.vy });
+  } else {
+    sendToHost({ type: "move", id: myId, x: p.x, y: p.y, vy: p.vy });
+  }
+
+  const puId = checkPowerupCollision(p);
+  if (puId) {
+    if (isHost) {
+      const pu = powerups[puId];
+      delete powerups[puId];
+      if (pu.type === "speed") {
+        p.speedBoostUntil = Date.now() + 6000;
+      } else {
+        p.jumpBoostUntil = Date.now() + 6000;
+      }
+      broadcast({ type: "powerupRemove", id: puId });
+      broadcast({
+        type: "boost",
+        id: myId,
+        speedUntil: p.speedBoostUntil || 0,
+        jumpUntil: p.jumpBoostUntil || 0
+      });
+      renderPowerups();
+    } else {
+      sendToHost({ type: "pickup", id: myId, powerupId: puId });
+    }
+  }
+
+  if (p.isIt) {
+    for (let id in players) {
+      if (id === myId) continue;
+      const o = players[id];
+      if (checkCollision(p, o)) {
+        if (isHost) {
+          applyTag(myId, id);
+        } else {
+          sendToHost({ type: "tag", from: myId, to: id });
+        }
+        break;
+      }
+    }
+  }
+
+  renderPlayers();
+}
+
+function gameLoop() {
+  physicsStep();
+  requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
+
+// HOST
+function setupHost() {
+  peer = new Peer();
+  isHost = true;
+
+  peer.on("open", id => {
+    myId = id;
+    myIdEl.textContent = "Host ID: " + id;
+    statusEl.textContent = "Waiting for players...";
+    readyBtn.disabled = false;
+    chatInputEl.disabled = false;
+
+    players[id] = {
+      name: document.getElementById("nameInput").value || "Host",
+      ready: false,
+      x: 150,
+      y: 80,   // spawn at top
+      vy: 0,
+      isIt: true,
+      speedBoostUntil: 0,
+      jumpBoostUntil: 0
+    };
+    updatePlayersList();
+    renderPlayers();
+    renderPlatforms();
+  });
+
+  peer.on("connection", conn => {
+    if (Object.keys(players).length >= 6) {
+      conn.close();
+      return;
     }
 
-    // ---------- PeerJS setup ----------
-    let peer = null;
-    let isHost = false;
-    const connections = []; // host: all clients; client: single host
-    const myIdEl = document.getElementById('myId');
-    const hostIdInput = document.getElementById('hostIdInput');
-    const nameInput = document.getElementById('nameInput');
-    const btnHost = document.getElementById('btnHost');
-    const btnConnect = document.getElementById('btnConnect');
+    connections[conn.peer] = conn;
 
-    btnHost.onclick = () => {
-      if (peer) return;
-      isHost = true;
-      peer = new Peer();
-      peer.on('open', id => {
-        myIdEl.textContent = id;
-        log('Host created with ID: ' + id);
+    conn.on("data", data => {
+      if (data.type === "join") {
+        const idx = Object.keys(players).length;
+        players[data.id] = {
+          name: data.name,
+          ready: false,
+          x: 300 + (idx * 120),
+          y: 80,   // spawn at top
+          vy: 0,
+          isIt: false,
+          speedBoostUntil: 0,
+          jumpBoostUntil: 0
+        };
+
+        conn.send({ type: "fullState", players, powerups, gameState });
+        broadcast({ type: "playerJoined", id: data.id, player: players[data.id] });
+
         updatePlayersList();
-      });
-      peer.on('connection', c => {
-        if (connections.length >= 3) {
-          log('Lobby full (max 4 players including host)');
-          c.close();
-          return;
+        renderPlayers();
+        renderPlatforms();
+        logChat(`${data.name} joined`, "sysMsg");
+      }
+
+      if (data.type === "move" && gameState === "PLAYING") {
+        const p = players[data.id];
+        if (!p) return;
+        p.x = data.x;
+        p.y = data.y;
+        p.vy = data.vy;
+        broadcast({ type: "update", id: data.id, x: p.x, y: p.y, vy: p.vy });
+        renderPlayers();
+      }
+
+      if (data.type === "ready") {
+        players[data.id].ready = data.ready;
+        broadcast({ type: "readyUpdate", id: data.id, ready: data.ready });
+        updatePlayersList();
+
+        const allReady = Object.values(players).length > 1 &&
+          Object.values(players).every(p => p.ready);
+        startBtn.disabled = !allReady;
+      }
+
+      if (data.type === "chat") {
+        const sender = players[data.id].name;
+        broadcast({ type: "chat", id: data.id, name: sender, text: data.text });
+        logChat(sender + ": " + data.text, "otherMsg");
+      }
+
+      if (data.type === "tag") {
+        applyTag(data.from, data.to);
+      }
+
+      if (data.type === "pickup") {
+        const pu = powerups[data.powerupId];
+        if (!pu) return;
+        delete powerups[data.powerupId];
+
+        const p = players[data.id];
+        if (!p) return;
+
+        if (pu.type === "speed") {
+          p.speedBoostUntil = Date.now() + 6000;
+        } else {
+          p.jumpBoostUntil = Date.now() + 6000;
         }
-        connections.push(c);
-        const playerIndex = connections.length; // host is 0, clients 1..3
-        log('Client connected as player ' + playerIndex);
-        setupHostConnectionHandlers(c, playerIndex);
-        c.on('open', () => {
-          c.send({ type: 'assignIndex', index: playerIndex });
-          c.send({ type: 'requestName' });
+
+        broadcast({ type: "powerupRemove", id: data.powerupId });
+        broadcast({
+          type: "boost",
+          id: data.id,
+          speedUntil: p.speedBoostUntil || 0,
+          jumpUntil: p.jumpBoostUntil || 0
         });
-      });
-    };
-
-    btnConnect.onclick = () => {
-      if (peer) return;
-      const hostId = hostIdInput.value.trim();
-      if (!hostId) return alert('Enter host ID');
-      isHost = false;
-      peer = new Peer();
-      peer.on('open', id => {
-        myIdEl.textContent = id;
-        log('Client ID: ' + id);
-        const conn = peer.connect(hostId);
-        connections.push(conn);
-        conn.on('open', () => {
-          log('Connected to host');
-          setupClientConnectionHandlers(conn);
-        });
-      });
-    };
-
-    // ---------- Game state ----------
-    const canvas = document.getElementById('game');
-    const ctx = canvas.getContext('2d');
-
-    const GRAVITY = 0.7;
-    const FRICTION = 0.82;
-    const LEVEL_WIDTH = 4500;
-    const GROUND_Y = 420;
-
-    const camera = { x: 0, y: 0 };
-
-    let myPlayerIndex = 0; // host = 0, clients get 1..3 from host
-
-    function makePlayer(x, y, color) {
-      return {
-        x, y,
-        w: 32, h: 46,
-        vx: 0, vy: 0,
-        onGround: false,
-        color,
-        name: '',
-        input: { left:false, right:false, jump:false, dash:false },
-        dashTimer: 0,
-        dashCooldown: 0,
-        shield: 0,
-        speedBoost: 0,
-        isDashing: false
-      };
-    }
-
-    const players = [
-      makePlayer(120, GROUND_Y - 46, '#facc15'), // host
-      makePlayer(160, GROUND_Y - 46, '#38bdf8'),
-      makePlayer(200, GROUND_Y - 46, '#fb7185'),
-      makePlayer(240, GROUND_Y - 46, '#a855f7')
-    ];
-
-    let itIndex = 0; // who is "It"
-
-    const platforms = [];
-    platforms.push({ x: 0, y: GROUND_Y, w: LEVEL_WIDTH, h: 80 });
-
-    for (let i = 0; i < 24; i++) {
-      const x = 250 + i * 160;
-      const y = 280 - (Math.sin(i * 0.5) * 90);
-      platforms.push({ x, y, w: 140, h: 22 });
-    }
-
-    const powerups = [];
-    function spawnPowerup(type, x, y) {
-      powerups.push({ type, x, y, w: 20, h: 20, active: true });
-    }
-    // scatter some powerups
-    for (let i = 0; i < 10; i++) {
-      const plat = platforms[1 + Math.floor(Math.random() * (platforms.length - 1))];
-      const type = Math.random() < 0.5 ? 'speed' : 'shield';
-      spawnPowerup(type, plat.x + plat.w / 2 - 10, plat.y - 24);
-    }
-
-    // Input
-    const keys = {};
-    window.addEventListener('keydown', e => {
-      keys[e.code] = true;
-    });
-    window.addEventListener('keyup', e => {
-      keys[e.code] = false;
+        renderPowerups();
+        renderPlayers();
+      }
     });
 
-    // ---------- Networking handlers ----------
-    function setupHostConnectionHandlers(conn, playerIndex) {
-      conn.on('data', msg => {
-        if (msg.type === 'input') {
-          players[playerIndex].input = msg.input;
-        } else if (msg.type === 'name') {
-          players[playerIndex].name = msg.name || ('Player ' + playerIndex);
-          updatePlayersList();
-        }
+    conn.on("close", () => {
+      const pid = conn.peer;
+      if (players[pid]) {
+        logChat(`${players[pid].name} left`, "sysMsg");
+        delete players[pid];
+        broadcast({ type: "playerLeft", id: pid });
+        const el = document.getElementById("p_" + pid);
+        if (el) el.remove();
+        updatePlayersList();
+      }
+      delete connections[pid];
+    });
+  });
+}
+
+// GUEST
+function setupGuest(hostId) {
+  peer = new Peer();
+
+  peer.on("open", id => {
+    myId = id;
+    myIdEl.textContent = "Your ID: " + id;
+    statusEl.textContent = "Connecting...";
+    readyBtn.disabled = false;
+    chatInputEl.disabled = false;
+
+    myConn = peer.connect(hostId);
+
+    myConn.on("open", () => {
+      statusEl.textContent = "Connected";
+      myConn.send({
+        type: "join",
+        id,
+        name: document.getElementById("nameInput").value || "Player"
       });
-      conn.on('close', () => {
-        log('Client disconnected (player ' + playerIndex + ')');
-      });
-    }
+    });
 
-    function setupClientConnectionHandlers(conn) {
-      conn.on('data', msg => {
-        if (msg.type === 'assignIndex') {
-          myPlayerIndex = msg.index;
-          log('Assigned player index: ' + myPlayerIndex);
-          updatePlayersList();
-        } else if (msg.type === 'requestName') {
-          const name = nameInput.value.trim() || 'Player';
-          conn.send({ type: 'name', name });
-        } else if (msg.type === 'state') {
-          applyStateFromHost(msg.state);
-        }
-      });
-      conn.on('close', () => log('Disconnected from host'));
-    }
-
-    function sendInputToHost(input) {
-      const conn = connections[0];
-      if (!conn || !conn.open) return;
-      conn.send({ type: 'input', input });
-    }
-
-    function broadcastStateFromHost() {
-      const state = {
-        players,
-        itIndex,
-        cameraX: camera.x,
-        powerups
-      };
-      connections.forEach(c => {
-        if (c.open) c.send({ type: 'state', state });
-      });
-    }
-
-    function applyStateFromHost(state) {
-      for (let i = 0; i < players.length; i++) {
-        if (!state.players[i]) continue;
-        const sp = state.players[i];
-        const p = players[i];
-        p.x = sp.x;
-        p.y = sp.y;
-        p.vx = sp.vx;
-        p.vy = sp.vy;
-        p.onGround = sp.onGround;
-        p.dashTimer = sp.dashTimer;
-        p.dashCooldown = sp.dashCooldown;
-        p.shield = sp.shield;
-        p.speedBoost = sp.speedBoost;
-        p.isDashing = sp.isDashing;
-        p.name = sp.name;
-      }
-      itIndex = state.itIndex;
-      camera.x = state.cameraX;
-      powerups.length = 0;
-      state.powerups.forEach(pu => powerups.push(pu));
-      updatePlayersList();
-    }
-
-    // ---------- Game logic ----------
-    function rectIntersect(a, b) {
-      return a.x < b.x + b.w &&
-             a.x + a.w > b.x &&
-             a.y < b.y + b.h &&
-             a.y + a.h > b.y;
-    }
-
-    function updateHost() {
-      // Host reads its own input from keyboard
-      const hostInput = {
-        left: keys['ArrowLeft'] || keys['KeyA'],
-        right: keys['ArrowRight'] || keys['KeyD'],
-        jump: keys['ArrowUp'] || keys['Space'] || keys['KeyW'],
-        dash: keys['ShiftLeft'] || keys['ShiftRight']
-      };
-      players[0].input = hostInput;
-
-      const baseSpeed = 0.9;
-      const dashSpeed = 12;
-      const dashDuration = 12;   // frames
-      const dashCooldownFrames = 60; // 1s at ~60fps
-
-      for (let i = 0; i < players.length; i++) {
-        const p = players[i];
-        const input = p.input || { left:false, right:false, jump:false, dash:false };
-
-        // speed boost
-        let moveSpeed = baseSpeed * (p.speedBoost > 0 ? 1.7 : 1.0);
-
-        // dash logic
-        if (p.dashCooldown > 0) p.dashCooldown--;
-        if (p.dashTimer > 0) {
-          p.dashTimer--;
-          p.isDashing = true;
-        } else {
-          p.isDashing = false;
-        }
-
-        if (input.dash && p.dashCooldown <= 0 && p.dashTimer <= 0) {
-          // start short burst dash
-          p.dashTimer = dashDuration;
-          p.dashCooldown = dashCooldownFrames;
-          // direction based on input or facing
-          let dir = 0;
-          if (input.right) dir = 1;
-          else if (input.left) dir = -1;
-          else dir = (i === itIndex ? 1 : (Math.random() < 0.5 ? -1 : 1));
-          p.vx = dir * dashSpeed;
-        }
-
-        // normal movement only if not currently in dash burst
-        if (!p.isDashing) {
-          if (input.left) p.vx -= moveSpeed;
-          if (input.right) p.vx += moveSpeed;
-        }
-
-        // jump
-        if (input.jump && p.onGround) {
-          p.vy = -13;
-          p.onGround = false;
-        }
-
-        p.vx *= FRICTION;
-        p.vy += GRAVITY;
-
-        p.x += p.vx;
-        p.y += p.vy;
-
-        // bounds
-        if (p.x < 0) p.x = 0;
-        if (p.x + p.w > LEVEL_WIDTH) p.x = LEVEL_WIDTH - p.w;
-
-        // collisions
-        p.onGround = false;
-        for (const plat of platforms) {
-          if (rectIntersect(p, plat)) {
-            const prevY = p.y - p.vy;
-            if (prevY + p.h <= plat.y) {
-              p.y = plat.y - p.h;
-              p.vy = 0;
-              p.onGround = true;
-            } else if (prevY >= plat.y + plat.h) {
-              p.y = plat.y + plat.h;
-              p.vy = 0.5;
-            } else {
-              if (p.x + p.w / 2 < plat.x + plat.w / 2) {
-                p.x = plat.x - p.w;
-              } else {
-                p.x = plat.x + plat.w;
-              }
-              p.vx = 0;
-            }
-          }
-        }
-
-        // powerup pickup
-        for (const pu of powerups) {
-          if (!pu.active) continue;
-          if (rectIntersect(p, pu)) {
-            pu.active = false;
-            if (pu.type === 'speed') {
-              p.speedBoost = 600; // ~10s
-            } else if (pu.type === 'shield') {
-              p.shield = 1;
-            }
-          }
-        }
-
-        // timers
-        if (p.speedBoost > 0) p.speedBoost--;
+    myConn.on("data", data => {
+      if (data.type === "fullState") {
+        players = data.players;
+        powerups = data.powerups || {};
+        updateGameState(data.gameState || "LOBBY");
+        updatePlayersList();
+        renderPlayers();
+        renderPowerups();
+        renderPlatforms();
       }
 
-      // Tag logic: only if "It" is currently dashing
-      const itPlayer = players[itIndex];
-      if (itPlayer.isDashing) {
-        for (let i = 0; i < players.length; i++) {
-          if (i === itIndex) continue;
-          const other = players[i];
-          if (rectIntersect(itPlayer, other)) {
-            if (other.shield > 0) {
-              // shield absorbs one tag
-              other.shield = 0;
-            } else {
-              itIndex = i;
-            }
-            break;
-          }
-        }
+      if (data.type === "playerJoined") {
+        players[data.id] = data.player;
+        updatePlayersList();
+        renderPlayers();
+        logChat(`${data.player.name} joined`, "sysMsg");
       }
 
-      // Camera follows center of active players
-      let sumX = 0, count = 0;
-      for (const p of players) {
-        sumX += p.x;
-        count++;
-      }
-      const centerX = sumX / count;
-      const targetCamX = centerX - canvas.width / 2;
-      camera.x += (targetCamX - camera.x) * 0.1;
-      if (camera.x < 0) camera.x = 0;
-      if (camera.x + canvas.width > LEVEL_WIDTH) camera.x = LEVEL_WIDTH - canvas.width;
-
-      broadcastStateFromHost();
-      updatePlayersList();
-    }
-
-    function updateClient() {
-      const input = {
-        left: keys['ArrowLeft'] || keys['KeyA'],
-        right: keys['ArrowRight'] || keys['KeyD'],
-        jump: keys['ArrowUp'] || keys['Space'] || keys['KeyW'],
-        dash: keys['ShiftLeft'] || keys['ShiftRight']
-      };
-      sendInputToHost(input);
-    }
-
-    // ---------- Lobby UI ----------
-    const playersListEl = document.getElementById('playersList');
-    function updatePlayersList() {
-      playersListEl.innerHTML = '';
-      for (let i = 0; i < players.length; i++) {
-        const p = players[i];
-        const li = document.createElement('li');
-        const name = p.name || ('Player ' + i);
-        const left = document.createElement('span');
-        left.textContent = name;
-        const right = document.createElement('span');
-
-        const pillYou = document.createElement('span');
-        pillYou.className = 'pill';
-        if (i === myPlayerIndex) {
-          pillYou.classList.add('you');
-          pillYou.textContent = 'YOU';
-        } else {
-          pillYou.textContent = 'P' + i;
-        }
-
-        const pillIt = document.createElement('span');
-        pillIt.className = 'pill';
-        if (i === itIndex) {
-          pillIt.classList.add('it');
-          pillIt.textContent = 'IT';
-        } else {
-          pillIt.textContent = '';
-        }
-
-        right.appendChild(pillYou);
-        if (pillIt.textContent) {
-          right.appendChild(document.createTextNode(' '));
-          right.appendChild(pillIt);
-        }
-
-        li.appendChild(left);
-        li.appendChild(right);
-        playersListEl.appendChild(li);
-      }
-    }
-
-    // ---------- Rendering ----------
-    function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Sky gradient
-      const grd = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      grd.addColorStop(0, '#0f172a');
-      grd.addColorStop(1, '#022c22');
-      ctx.fillStyle = grd;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      ctx.save();
-      ctx.translate(-camera.x, -camera.y);
-
-      // Background hills
-      ctx.fillStyle = '#0b1120';
-      ctx.beginPath();
-      ctx.moveTo(0, 380);
-      for (let x = 0; x <= LEVEL_WIDTH; x += 80) {
-        ctx.lineTo(x, 380 + Math.sin(x * 0.001) * 40);
-      }
-      ctx.lineTo(LEVEL_WIDTH, canvas.height);
-      ctx.lineTo(0, canvas.height);
-      ctx.closePath();
-      ctx.fill();
-
-      // Platforms
-      ctx.fillStyle = '#1f2937';
-      for (const p of platforms) {
-        ctx.fillRect(p.x, p.y, p.w, p.h);
+      if (data.type === "playerLeft") {
+        delete players[data.id];
+        const el = document.getElementById("p_" + data.id);
+        if (el) el.remove();
+        updatePlayersList();
       }
 
-      // Powerups
-      for (const pu of powerups) {
-        if (!pu.active) continue;
-        if (pu.type === 'speed') {
-          ctx.fillStyle = '#38bdf8';
-        } else {
-          ctx.fillStyle = '#4ade80';
-        }
-        ctx.beginPath();
-        ctx.roundRect(pu.x, pu.y, pu.w, pu.h, 4);
-        ctx.fill();
-        ctx.strokeStyle = '#0b1120';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+      if (data.type === "readyUpdate") {
+        players[data.id].ready = data.ready;
+        updatePlayersList();
       }
 
-      // Players
-      for (let i = 0; i < players.length; i++) {
-        const p = players[i];
-        const isIt = (i === itIndex);
-        const isYou = (i === myPlayerIndex);
-
-        // shadow
-        ctx.fillStyle = 'rgba(15,23,42,0.7)';
-        ctx.beginPath();
-        ctx.ellipse(p.x + p.w / 2, p.y + p.h, p.w / 2, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // body
-        let bodyColor = p.color;
-        if (isIt) bodyColor = '#facc15';
-        ctx.fillStyle = bodyColor;
-        ctx.beginPath();
-        ctx.roundRect(p.x, p.y, p.w, p.h, 6);
-        ctx.fill();
-
-        // outline
-        ctx.strokeStyle = '#020617';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        // face
-        ctx.fillStyle = '#0b1120';
-        ctx.beginPath();
-        ctx.arc(p.x + 10, p.y + 16, 3, 0, Math.PI * 2);
-        ctx.arc(p.x + 22, p.y + 16, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(p.x + 16, p.y + 26, 6, 0, Math.PI);
-        ctx.stroke();
-
-        // dash trail
-        if (p.isDashing) {
-          ctx.strokeStyle = 'rgba(56,189,248,0.6)';
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.moveTo(p.x + p.w / 2, p.y + p.h / 2);
-          ctx.lineTo(p.x + p.w / 2 - p.vx * 0.4, p.y + p.h / 2);
-          ctx.stroke();
-        }
-
-        // shield aura
-        if (p.shield > 0) {
-          ctx.strokeStyle = 'rgba(74,222,128,0.7)';
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.roundRect(p.x - 4, p.y - 4, p.w + 8, p.h + 8, 8);
-          ctx.stroke();
-        }
-
-        // speed aura
-        if (p.speedBoost > 0) {
-          ctx.strokeStyle = 'rgba(56,189,248,0.7)';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.roundRect(p.x - 2, p.y - 2, p.w + 4, p.h + 4, 6);
-          ctx.stroke();
-        }
-
-        // name label
-        ctx.fillStyle = '#e5e7eb';
-        ctx.font = '12px system-ui';
-        const name = p.name || ('P' + i);
-        ctx.fillText(name + (isIt ? ' (IT)' : '') + (isYou ? ' (YOU)' : ''), p.x, p.y - 6);
+      if (data.type === "chat") {
+        const cls = data.id === myId ? "meMsg" : "otherMsg";
+        logChat(data.name + ": " + data.text, cls);
       }
 
-      ctx.restore();
+      if (data.type === "update") {
+        if (!players[data.id]) return;
+        players[data.id].x = data.x;
+        players[data.id].y = data.y;
+        players[data.id].vy = data.vy;
+        renderPlayers();
+      }
 
-      // HUD
-      ctx.fillStyle = '#e5e7eb';
-      ctx.font = '14px system-ui';
-      ctx.fillText('Dash Tag – only dash collisions count as tags. Shift to dash.', 20, 26);
-      ctx.fillText('Speed Boost (blue) · Shield (green)', 20, 46);
-    }
+      if (data.type === "stateChange") {
+        updateGameState(data.state);
+      }
 
-    // ---------- Main loop ----------
-    function loop() {
-      if (isHost) updateHost();
-      else if (peer) updateClient();
+      if (data.type === "tagUpdate") {
+        for (let id in players) players[id].isIt = false;
+        if (players[data.itId]) players[data.itId].isIt = true;
+        updatePlayersList();
+        renderPlayers();
+      }
 
-      draw();
-      requestAnimationFrame(loop);
-    }
-    loop();
-  </script>
+      if (data.type === "powerupSpawn") {
+        powerups[data.id] = { x: data.x, y: data.y, type: data.powerupType };
+        renderPowerups();
+      }
+
+      if (data.type === "powerupRemove") {
+        delete powerups[data.id];
+        renderPowerups();
+      }
+
+      if (data.type === "boost") {
+        const p = players[data.id];
+        if (!p) return;
+        p.speedBoostUntil = data.speedUntil || 0;
+        p.jumpBoostUntil = data.jumpUntil || 0;
+        renderPlayers();
+      }
+    });
+  });
+}
+
+// UI handlers
+document.getElementById("hostBtn").onclick = () => {
+  if (!peer) setupHost();
+};
+
+document.getElementById("joinBtn").onclick = () => {
+  if (!peer) {
+    const hostId = document.getElementById("joinId").value.trim();
+    if (hostId) setupGuest(hostId);
+  }
+};
+
+readyBtn.onclick = () => {
+  if (!myId || !players[myId]) return;
+  const newReady = !players[myId].ready;
+  players[myId].ready = newReady;
+  updatePlayersList();
+
+  if (isHost) {
+    broadcast({ type: "readyUpdate", id: myId, ready: newReady });
+    const allReady = Object.values(players).length > 1 &&
+      Object.values(players).every(p => p.ready);
+    startBtn.disabled = !allReady;
+  } else {
+    sendToHost({ type: "ready", id: myId, ready: newReady });
+  }
+};
+
+startBtn.onclick = () => {
+  if (!isHost) return;
+  updateGameState("PLAYING");
+  broadcast({ type: "stateChange", state: "PLAYING" });
+  statusEl.textContent = "Game started – run, jump, tag!";
+};
+
+chatInputEl.addEventListener("keydown", e => {
+  if (e.key !== "Enter") return;
+  const text = chatInputEl.value.trim();
+  if (!text || !myId) return;
+  chatInputEl.value = "";
+
+  const name = players[myId].name;
+
+  if (isHost) {
+    broadcast({ type: "chat", id: myId, name, text });
+    logChat(name + ": " + text, "meMsg");
+  } else {
+    sendToHost({ type: "chat", id: myId, text });
+    logChat(name + ": " + text, "meMsg");
+  }
+});
+
+// input
+window.addEventListener("keydown", e => {
+  keys[e.key] = true;
+});
+
+window.addEventListener("keyup", e => {
+  keys[e.key] = false;
+});
+
+// initial platforms
+renderPlatforms();
+</script>
 </body>
 </html>
-
