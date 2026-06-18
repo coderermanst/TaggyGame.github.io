@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>PeerJS Platformer Tag – 6 Players, Powerups</title>
+  <title>PeerJS Platformer Tag – 6 Players, Platforms, Powerups</title>
   <style>
     body { font-family: sans-serif; display: flex; gap: 20px; }
 
@@ -98,6 +98,13 @@
       from { transform: scale(0.9); opacity: 0.7; }
       to   { transform: scale(1.1); opacity: 1; }
     }
+
+    .platform {
+      position: absolute;
+      background: #5d4037;
+      border: 2px solid #3e2723;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
@@ -160,7 +167,6 @@ const readyBtn = document.getElementById("readyBtn");
 const startBtn = document.getElementById("startBtn");
 const gameEl = document.getElementById("game");
 
-const groundY = 520;
 const gravity = 0.6;
 const baseMoveSpeed = 3.5;
 const baseJumpSpeed = -11;
@@ -172,6 +178,16 @@ const textures = [
   "linear-gradient(135deg,#ffd180,#ff6d00)",
   "linear-gradient(135deg,#ea80fc,#d500f9)",
   "linear-gradient(135deg,#b0bec5,#455a64)"
+];
+
+// Big map platforms (ground + floating)
+const platforms = [
+  { x: 0,   y: 540, w: 1200, h: 60 },  // ground
+  { x: 150, y: 420, w: 200,  h: 20 },
+  { x: 450, y: 360, w: 250,  h: 20 },
+  { x: 800, y: 320, w: 220,  h: 20 },
+  { x: 300, y: 260, w: 180,  h: 20 },
+  { x: 700, y: 220, w: 200,  h: 20 }
 ];
 
 let keys = {};
@@ -225,6 +241,19 @@ function createPowerupElement(id) {
   gameEl.appendChild(el);
 }
 
+function renderPlatforms() {
+  document.querySelectorAll(".platform").forEach(p => p.remove());
+  platforms.forEach(p => {
+    const el = document.createElement("div");
+    el.className = "platform";
+    el.style.left = p.x + "px";
+    el.style.top = p.y + "px";
+    el.style.width = p.w + "px";
+    el.style.height = p.h + "px";
+    gameEl.appendChild(el);
+  });
+}
+
 function renderPlayers() {
   const ids = Object.keys(players);
   ids.forEach((id, idx) => {
@@ -243,7 +272,6 @@ function renderPlayers() {
 }
 
 function renderPowerups() {
-  // remove old
   Array.from(document.querySelectorAll(".powerup")).forEach(el => {
     const id = el.id.replace("pu_", "");
     if (!powerups[id]) el.remove();
@@ -268,7 +296,7 @@ function spawnPowerup() {
   const id = Math.random().toString(36).slice(2, 8);
   const type = Math.random() < 0.5 ? "speed" : "jump";
   const x = Math.random() * (1200 - 26);
-  const y = groundY - 40 - Math.random() * 200;
+  const y = 150 + Math.random() * 250;
 
   powerups[id] = { x, y, type };
   broadcast({ type: "powerupSpawn", id, x, y, powerupType: type });
@@ -306,6 +334,34 @@ function applyTag(fromId, toId) {
   logChat(`${players[fromId].name} tagged ${players[toId].name}. ${players[toId].name} is IT now!`, "sysMsg");
 }
 
+function applyPlatformPhysics(p) {
+  p.vy += gravity;
+  p.y += p.vy;
+
+  let onGround = false;
+
+  for (let plat of platforms) {
+    const px1 = p.x;
+    const px2 = p.x + 40;
+    const py1 = p.y;
+    const py2 = p.y + 60;
+
+    const bx1 = plat.x;
+    const bx2 = plat.x + plat.w;
+    const by1 = plat.y;
+
+    const falling = p.vy >= 0;
+
+    if (falling && px2 > bx1 && px1 < bx2 && py2 >= by1 && py1 < by1 + 25) {
+      p.y = by1 - 60;
+      p.vy = 0;
+      onGround = true;
+    }
+  }
+
+  return onGround;
+}
+
 function physicsStep() {
   if (gameState !== "PLAYING" || !myId || !players[myId]) return;
 
@@ -320,16 +376,10 @@ function physicsStep() {
   if (keys["ArrowLeft"] || keys["a"]) p.x -= moveSpeed;
   if (keys["ArrowRight"] || keys["d"]) p.x += moveSpeed;
 
-  if ((keys["ArrowUp"] || keys["w"] || keys[" "]) && p.y >= groundY - 0.1) {
+  const onGroundBefore = applyPlatformPhysics(p);
+
+  if ((keys["ArrowUp"] || keys["w"] || keys[" "]) && onGroundBefore) {
     p.vy = jumpSpeed;
-  }
-
-  p.vy += gravity;
-  p.y += p.vy;
-
-  if (p.y > groundY) {
-    p.y = groundY;
-    p.vy = 0;
   }
 
   p.x = Math.max(0, Math.min(1200 - 40, p.x));
@@ -403,7 +453,7 @@ function setupHost() {
       name: document.getElementById("nameInput").value || "Host",
       ready: false,
       x: 100,
-      y: groundY,
+      y: 50,   // spawn at top
       vy: 0,
       isIt: true,
       speedBoostUntil: 0,
@@ -411,6 +461,7 @@ function setupHost() {
     };
     updatePlayersList();
     renderPlayers();
+    renderPlatforms();
   });
 
   peer.on("connection", conn => {
@@ -428,7 +479,7 @@ function setupHost() {
           name: data.name,
           ready: false,
           x: 200 + (idx * 80),
-          y: groundY,
+          y: 50,   // spawn at top
           vy: 0,
           isIt: false,
           speedBoostUntil: 0,
@@ -440,6 +491,7 @@ function setupHost() {
 
         updatePlayersList();
         renderPlayers();
+        renderPlatforms();
         logChat(`${data.name} joined`, "sysMsg");
       }
 
@@ -544,6 +596,7 @@ function setupGuest(hostId) {
         updatePlayersList();
         renderPlayers();
         renderPowerups();
+        renderPlatforms();
       }
 
       if (data.type === "playerJoined") {
@@ -670,6 +723,9 @@ window.addEventListener("keydown", e => {
 window.addEventListener("keyup", e => {
   keys[e.key] = false;
 });
+
+// initial platforms render (for host before connections)
+renderPlatforms();
 </script>
 </body>
 </html>
